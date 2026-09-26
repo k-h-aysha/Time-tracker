@@ -21,6 +21,7 @@ export default function AnalyticsPage() {
     )
   }
 
+  // Generate trend data for selected categories based on view mode
   const getTrendData = (catIds: string[]) => {
     if (viewMode === 'daily') {
       const data: any[] = []
