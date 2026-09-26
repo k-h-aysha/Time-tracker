@@ -87,7 +87,7 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-4xl font-bold mb-2" style={{ fontFamily: 'cursive' }}>Analytics</h1>
+        <h1 className="text-4xl font-bold mb-2">Analytics</h1>
         <p className="text-slate-600">Track your time trends over days and weeks</p>
       </div>
 
