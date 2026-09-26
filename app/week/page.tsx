@@ -11,9 +11,12 @@ export default function WeekPage() {
   const [weekOffset, setWeekOffset] = useState(0)
 
   const today = timeUtils.getToday()
-  const baseDate = new Date(today + 'T00:00:00')
+  const [year, month, day] = today.split('-').map(Number)
+  const baseDate = new Date(year, month - 1, day)
   baseDate.setDate(baseDate.getDate() - weekOffset * 7)
-  const weekStart = timeUtils.getWeekStart(baseDate.toISOString().split('T')[0])
+  const baseDateStr = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
+  const weekStart = timeUtils.getWeekStart(baseDateStr)
+  const weekEnd = timeUtils.getWeekEnd(weekStart)
 
   const weekStats = analyticsUtils.calculateWeeklyStats(entries, weekStart, categories)
   const weekDates = timeUtils.getWeekDates(weekStart)
@@ -147,7 +150,6 @@ export default function WeekPage() {
                         }}
                         title={category ? category.name : 'Empty'}
                       >
-                        {category?.icon}
                       </div>
                     </div>
                   )

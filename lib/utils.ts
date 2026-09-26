@@ -28,26 +28,42 @@ export const timeUtils = {
   },
 
   getDayName(date: string): string {
-    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })
+    const [year, month, day] = date.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
+    return d.toLocaleDateString('en-US', { weekday: 'short' })
   },
 
   getWeekStart(date: string): string {
-    const d = new Date(date + 'T00:00:00')
-    d.setDate(d.getDate() - d.getDay() + 1)
-    return d.toISOString().split('T')[0]
+    const [year, month, day] = date.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
+    const dayOfWeek = d.getDay()
+    d.setDate(d.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dy = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dy}`
   },
 
   getWeekEnd(date: string): string {
-    const d = new Date(date + 'T00:00:00')
-    d.setDate(d.getDate() - d.getDay() + 7)
-    return d.toISOString().split('T')[0]
+    const [year, month, day] = date.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
+    const dayOfWeek = d.getDay()
+    d.setDate(d.getDate() + (dayOfWeek === 0 ? 0 : 7 - dayOfWeek))
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dy = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dy}`
   },
 
   getWeekDates(startDate: string): string[] {
     const dates = []
-    const d = new Date(startDate + 'T00:00:00')
+    const [year, month, day] = startDate.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
     for (let i = 0; i < 7; i++) {
-      dates.push(d.toISOString().split('T')[0])
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const dy = String(d.getDate()).padStart(2, '0')
+      dates.push(`${y}-${m}-${dy}`)
       d.setDate(d.getDate() + 1)
     }
     return dates
@@ -58,7 +74,9 @@ export const timeUtils = {
   },
 
   formatDate(date: string): string {
-    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    const [year, month, day] = date.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
+    return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',

@@ -2,168 +2,262 @@
 
 import { useState } from 'react'
 import { useApp } from '@/app/context'
-import { timeUtils, analyticsUtils } from '@/lib/utils'
+import { timeUtils } from '@/lib/utils'
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+
+type ViewMode = 'daily' | 'weekly'
 
 export default function AnalyticsPage() {
   const { categories, entries } = useApp()
-  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week')
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('')
+  const [comparisonCategoryIds, setComparisonCategoryIds] = useState<string[]>([])
+  const [viewMode, setViewMode] = useState<ViewMode>('weekly')
 
-  const today = timeUtils.getToday()
-  const weekStart = timeUtils.getWeekStart(today)
-  const lastWeekStart = new Date(weekStart + 'T00:00:00')
-  lastWeekStart.setDate(lastWeekStart.getDate() - 7)
-  const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0]
+  const toggleComparisonCategory = (categoryId: string) => {
+    setComparisonCategoryIds(prev =>
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    )
+  }
 
-  const thisWeek = analyticsUtils.calculateWeeklyStats(entries, weekStart, categories)
-  const lastWeek = analyticsUtils.calculateWeeklyStats(entries, lastWeekStartStr, categories)
+  const getTrendData = (catIds: string[]) => {
+    if (viewMode === 'daily') {
+      const data: any[] = []
+      const today = timeUtils.getToday()
+      const [year, month, day] = today.split('-').map(Number)
+      const currentDate = new Date(year, month - 1, day)
 
-  const handleCategorySelect = (categoryId: string) => {
-    if (selectedCategories.includes(categoryId)) {
-      setSelectedCategories(selectedCategories.filter(id => id !== categoryId))
+      for (let i = 27; i >= 0; i--) {
+        const d = new Date(currentDate)
+        d.setDate(d.getDate() - i)
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const dayName = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+
+        const dayEntries = entries.filter(e => e.date === dateStr)
+        const point: any = { date: dayName, dateStr }
+
+        catIds.forEach(catId => {
+          const catEntries = dayEntries.filter(e => e.categoryId === catId)
+          const hours = catEntries.reduce((sum, e) => sum + e.duration, 0) / 60
+          point[catId] = parseFloat(hours.toFixed(1))
+        })
+
+        data.push(point)
+      }
+      return data
     } else {
-      setSelectedCategories([...selectedCategories, categoryId])
+      const data: any[] = []
+      const today = timeUtils.getToday()
+      const [year, month, day] = today.split('-').map(Number)
+      const currentDate = new Date(year, month - 1, day)
+
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(currentDate)
+        d.setDate(d.getDate() - d.getDay() + 1 - i * 7)
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const weekEnd = new Date(d)
+        weekEnd.setDate(weekEnd.getDate() + 6)
+
+        const weekEntries = entries.filter(e => {
+          const [eyear, emonth, eday] = e.date.split('-').map(Number)
+          const entryDate = new Date(eyear, emonth - 1, eday)
+          return entryDate >= d && entryDate <= weekEnd
+        })
+
+        const weekNum = `W${Math.ceil((d.getDate() + 6) / 7)}`
+        const point: any = { week: weekNum }
+
+        catIds.forEach(catId => {
+          const catEntries = weekEntries.filter(e => e.categoryId === catId)
+          const hours = catEntries.reduce((sum, e) => sum + e.duration, 0) / 60
+          point[catId] = parseFloat(hours.toFixed(1))
+        })
+
+        data.push(point)
+      }
+      return data
     }
   }
 
-  const comparisonCategories = selectedCategories.length > 0 ? selectedCategories : categories.slice(0, 3).map(c => c.id)
+  const trendChartData = getTrendData(selectedCategoryId ? [selectedCategoryId] : [])
+  const comparisonChartData = getTrendData(comparisonCategoryIds)
+  const comparisonColors = comparisonCategoryIds.map(id => categories.find(c => c.id === id)?.color || '#999')
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-4xl font-bold mb-2">Analytics</h1>
-        <p className="text-slate-600">Analyze your time patterns and trends</p>
+        <p className="text-slate-600">Track your time trends over days and weeks</p>
       </div>
 
-      <div className="flex gap-3 border-b border-slate-200 pb-4">
-        {(['today', 'week', 'month'] as const).map(p => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            className={`px-4 py-2 font-medium transition capitalize ${
-              period === p ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'This Month'}
-          </button>
-        ))}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setViewMode('weekly')}
+          className={`px-6 py-2 rounded-lg font-semibold transition ${
+            viewMode === 'weekly'
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          Weekly
+        </button>
+        <button
+          onClick={() => setViewMode('daily')}
+          className={`px-6 py-2 rounded-lg font-semibold transition ${
+            viewMode === 'daily'
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          Daily
+        </button>
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-8 border-2 border-slate-200">
-        <h2 className="text-2xl font-bold mb-6">Time by Category</h2>
-
-        <div className="space-y-4">
-          {categories
-            .map(cat => ({
-              category: cat,
-              thisWeekMinutes: thisWeek.categoryBreakdown[cat.id] || 0,
-              lastWeekMinutes: lastWeek.categoryBreakdown[cat.id] || 0,
-            }))
-            .filter(s => s.thisWeekMinutes > 0 || s.lastWeekMinutes > 0)
-            .sort((a, b) => b.thisWeekMinutes - a.thisWeekMinutes)
-            .map(stat => {
-              const thisWeekHours = stat.thisWeekMinutes / 60
-              const lastWeekHours = stat.lastWeekMinutes / 60
-              const change = thisWeekHours - lastWeekHours
-              const changePercent = lastWeekHours > 0 ? (change / lastWeekHours) * 100 : 0
-
-              return (
-                <div key={stat.category.id} className="bg-white rounded-lg p-4 border border-slate-200">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{stat.category.icon}</span>
-                      <div>
-                        <div className="font-semibold">{stat.category.name}</div>
-                        <div className="text-xs text-slate-500">
-                          {thisWeekHours.toFixed(1)}h this week
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold" style={{ color: stat.category.color }}>
-                        {thisWeekHours.toFixed(1)}h
-                      </div>
-                      <div className={`text-xs font-medium ${change > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {change > 0 ? '+' : ''}{change.toFixed(1)}h ({changePercent > 0 ? '+' : ''}{changePercent.toFixed(0)}%)
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <div className="text-xs text-slate-500 mb-1">This week</div>
-                      <div className="w-full bg-slate-200 rounded h-2" style={{ backgroundColor: '#E5E7EB' }}>
-                        <div
-                          className="h-2 rounded"
-                          style={{
-                            width: `${Math.min(100, (thisWeekHours / 12) * 100)}%`,
-                            backgroundColor: stat.category.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-xs text-slate-500 mb-1">Last week</div>
-                      <div className="w-full bg-slate-200 rounded h-2" style={{ backgroundColor: '#E5E7EB' }}>
-                        <div
-                          className="h-2 rounded opacity-50"
-                          style={{
-                            width: `${Math.min(100, (lastWeekHours / 12) * 100)}%`,
-                            backgroundColor: stat.category.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-3">
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategoryId(selectedCategoryId === cat.id ? '' : cat.id)}
+              className={`px-4 py-2 rounded-full border-2 font-semibold transition flex items-center gap-2 ${
+                selectedCategoryId === cat.id
+                  ? 'bg-white border-slate-900 scale-105'
+                  : 'bg-white border-slate-300 hover:border-slate-400'
+              }`}
+              style={{
+                borderColor: selectedCategoryId === cat.id ? cat.color : '#CBD5E1',
+              }}
+            >
+              <div
+                className="w-4 h-4 rounded-full border-2"
+                style={{ backgroundColor: cat.color, borderColor: '#9CA3AF' }}
+              />
+              <span>{cat.name}</span>
+            </button>
+          ))}
         </div>
+
+        {selectedCategoryId ? (
+          <div className="p-6 rounded-lg border-4" style={{ borderStyle: 'dashed', backgroundColor: '#FFFBF0', borderColor: '#94A3B8' }}>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={trendChartData}>
+                <defs>
+                  <linearGradient id="gradient-trend" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={categories.find(c => c.id === selectedCategoryId)?.color || '#999'} stopOpacity={0.8} />
+                    <stop offset="95%" stopColor={categories.find(c => c.id === selectedCategoryId)?.color || '#999'} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis
+                  dataKey={viewMode === 'daily' ? 'date' : 'week'}
+                  stroke="#94A3B8"
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis
+                  stroke="#94A3B8"
+                  style={{ fontSize: '12px' }}
+                  label={{ value: 'Hours', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#FFFBF0',
+                    border: '2px solid #94A3B8',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(value: any) => `${value}h`}
+                />
+                <Area
+                  type="monotone"
+                  dataKey={selectedCategoryId}
+                  stroke={categories.find(c => c.id === selectedCategoryId)?.color || '#999'}
+                  fill="url(#gradient-trend)"
+                  strokeWidth={2}
+                  dot={{ fill: categories.find(c => c.id === selectedCategoryId)?.color || '#999', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="p-8 rounded-lg border-4 text-center" style={{ borderStyle: 'dashed', backgroundColor: '#FFFBF0', borderColor: '#94A3B8' }}>
+            <p className="text-slate-600 text-lg">Select a category to see trends</p>
+          </div>
+        )}
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-8 border-2 border-slate-200">
-        <h2 className="text-2xl font-bold mb-6">Week-over-Week Comparison</h2>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-300">
-                <th className="text-left py-3 px-4 font-semibold">Category</th>
-                <th className="text-right py-3 px-4 font-semibold">This Week</th>
-                <th className="text-right py-3 px-4 font-semibold">Last Week</th>
-                <th className="text-right py-3 px-4 font-semibold">Change</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories
-                .map(cat => ({
-                  category: cat,
-                  thisWeekMinutes: thisWeek.categoryBreakdown[cat.id] || 0,
-                  lastWeekMinutes: lastWeek.categoryBreakdown[cat.id] || 0,
-                }))
-                .filter(s => s.thisWeekMinutes > 0 || s.lastWeekMinutes > 0)
-                .sort((a, b) => b.thisWeekMinutes - a.thisWeekMinutes)
-                .map(stat => {
-                  const thisWeekHours = stat.thisWeekMinutes / 60
-                  const lastWeekHours = stat.lastWeekMinutes / 60
-                  const change = thisWeekHours - lastWeekHours
-
-                  return (
-                    <tr key={stat.category.id} className="border-b border-slate-200 hover:bg-white">
-                      <td className="py-3 px-4 flex items-center gap-2">
-                        <span>{stat.category.icon}</span>
-                        <span className="font-medium">{stat.category.name}</span>
-                      </td>
-                      <td className="text-right py-3 px-4 font-semibold">{thisWeekHours.toFixed(1)}h</td>
-                      <td className="text-right py-3 px-4 text-slate-600">{lastWeekHours.toFixed(1)}h</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${change > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {change > 0 ? '+' : ''}{change.toFixed(1)}h
-                      </td>
-                    </tr>
-                  )
-                })}
-            </tbody>
-          </table>
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold">Comparison</h3>
+        <div className="flex flex-wrap gap-3">
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => toggleComparisonCategory(cat.id)}
+              className={`px-4 py-2 rounded-full border-2 font-semibold transition flex items-center gap-2 ${
+                comparisonCategoryIds.includes(cat.id)
+                  ? 'bg-white border-slate-900 scale-105'
+                  : 'bg-white border-slate-300 hover:border-slate-400'
+              }`}
+              style={{
+                borderColor: comparisonCategoryIds.includes(cat.id) ? cat.color : '#CBD5E1',
+              }}
+            >
+              <div
+                className="w-4 h-4 rounded-full border-2"
+                style={{ backgroundColor: cat.color, borderColor: '#9CA3AF' }}
+              />
+              <span>{cat.name}</span>
+            </button>
+          ))}
         </div>
+
+        {comparisonCategoryIds.length > 0 ? (
+          <div className="p-6 rounded-lg border-4" style={{ borderStyle: 'dashed', backgroundColor: '#FFFBF0', borderColor: '#94A3B8' }}>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={comparisonChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis
+                  dataKey={viewMode === 'daily' ? 'date' : 'week'}
+                  stroke="#94A3B8"
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis
+                  stroke="#94A3B8"
+                  style={{ fontSize: '12px' }}
+                  label={{ value: 'Hours', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#FFFBF0',
+                    border: '2px solid #94A3B8',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(value: any) => `${value}h`}
+                />
+                <Legend 
+                  wrapperStyle={{ paddingTop: '20px' }}
+                  formatter={(value) => categories.find(c => c.id === value)?.name || value}
+                />
+                {comparisonCategoryIds.map((catId, idx) => (
+                  <Line
+                    key={catId}
+                    type="monotone"
+                    dataKey={catId}
+                    stroke={comparisonColors[idx]}
+                    strokeWidth={2}
+                    dot={{ fill: comparisonColors[idx], r: 4 }}
+                    activeDot={{ r: 6 }}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="p-8 rounded-lg border-4 text-center" style={{ borderStyle: 'dashed', backgroundColor: '#FFFBF0', borderColor: '#94A3B8' }}>
+            <p className="text-slate-600">Select 2+ categories to compare</p>
+          </div>
+        )}
       </div>
     </div>
   )
